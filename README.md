@@ -16,8 +16,8 @@ a new colony: it restarts with the **same new-game settings** and the **same sta
 - New map every time: the mod rolls a new map seed (the game keeps the seed among the new-game settings,
   so restarting without a new seed would rebuild the exact same island).
 - Two clicks: the first arms the button (*Click again to remake the map*), the second remakes.
-- The button shows on day 1 of a new colony and is removed when day 2 starts.
-- Setting under **Settings → Mods**: *Remake Map - day 1 button* (on by default).
+- The button sits above the bottom toolbar on day 1 of a new colony and is removed when day 2 starts. It lives in
+  the same part of the game UI as the toolbar, so loading screens and menus cover it.
 - Does nothing in the background: it reacts to the button and the day change only.
 
 ## Installing
@@ -48,7 +48,6 @@ Assets in `/Game/Mods/RemakeMap/` (modkit `Content/Mods/RemakeMap`):
 
 | Asset | Type | Notes |
 |---|---|---|
-| BP_Startup | Actor Blueprint | paste `docs/graphs/BP_Startup.txt` (mod option) |
 | BP_MapLoad | Actor Blueprint | paste `docs/graphs/BP_MapLoad.txt` |
 | WBP_RemakeButton | Widget Blueprint (User Widget) | designer only: Button `Btn` with a TextBlock `Label` inside, both *Is Variable* |
 | PAL_RemakeMap | Primary Asset Label | Chunk ID **30**, Label Assets in My Directory, Cook Rule Always Cook |
@@ -62,11 +61,15 @@ BP_MapLoad variables:
 | SetupTries | Integer |
 | Armed | Boolean |
 | Button | WBP_RemakeButton (Object Reference) |
-| Meta | Meta Save (Object Reference) |
 | Arco | Arco Systems (Object Reference) |
-| PrefKeys | Name **array** |
 | NewSeed | Integer |
 | NewRaw | Float |
+| Placed | Boolean |
+| HudTries | Integer |
+| Hud | User Widget (Object Reference) |
+| Level | Widget (Object Reference) **array** |
+| Next | Widget (Object Reference) **array** |
+| TB | Widget (Object Reference) |
 
 Copy `Mod/RemakeMap/RemakeMap.uplugin` into the modkit folder before Cook & Install.
 
@@ -76,7 +79,13 @@ Copy `Mod/RemakeMap/RemakeMap.uplugin` into the modkit folder before Cook & Inst
   colony name, starting whiskers (`newStartingAgents`), debt difficulty and the map preferences
   (`newMapPreferenceNames` / `newMapRawPreferences`: scenario, map size, islands, … and `Seed`).
 - Setup runs at BeginPlay (new games don't send `onLoadingFinished`) and at `onLoadingFinished`. The button is
-  shown when the option is on, `ArcoSystems.IsSaveGame` is false and `WorldTime.m_day` is 1.
+  created when `ArcoSystems.IsSaveGame` is false and `WorldTime.m_day` is 1.
+- It is placed next to the bottom toolbar. `GetAllWidgetsOfClass` only sees top-level widgets, so the mod takes
+  `BP_PlayHud_C` (ForEachLoop over the result) and walks its widget tree level by level (panels → `GetAllChildren`,
+  user widgets → `NaviUi.FindDecendentsOfClasses` with the concrete panel classes) until it meets the widget of class
+  `BottomToolbar_C` ("Toolbar"). The button is added to its parent `HideableElements` (CanvasPanel): anchor and
+  alignment bottom-centre, position (0, -400). The toolbar reports a desired size of 0, so a bar height of 100 is
+  assumed. Until the toolbar exists and is visible, a one-shot 1 s timer retries (max 60). The walk runs once.
 - Second click: `SetNewMapPreference("Seed", <random 1..9999999>, <random 0..1000>)`, then
   `ArcoGameInstance.EnterPlay(NEW_GENERATION)`, the same call a new game uses.
 - `ModAPI.onDayStart` with day > 1 removes the button.
@@ -84,10 +93,11 @@ Copy `Mod/RemakeMap/RemakeMap.uplugin` into the modkit folder before Cook & Inst
 ## Debug logging
 
 Create `%localappdata%\Whiskerwood\Saved\mods\RemakeMapConfig\debug.txt` with any text (an empty file counts as off);
-lines go to `Saved\Logs\modlog.txt` (colony state, MetaSave contents, the new seed).
+lines go to `Saved\Logs\modlog.txt` (colony state, where the button was placed, the new seed).
 
 ## Version history
 
+- **1.1** - the button sits above the bottom toolbar and is covered by loading screens and menus like the rest of the game UI; mod-menu setting removed.
 - **1.0** - first release.
 
 ## Credits

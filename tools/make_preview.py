@@ -45,12 +45,6 @@ glow = glow.filter(ImageFilter.GaussianBlur(7))
 img.paste(Image.new('RGB', (W, H), GOLD), (0, 0), glow)
 d = ImageDraw.Draw(img)
 d.rounded_rectangle((bx0 - 9, by0 - 7, bx1 + 9, by1 + 7), radius=20, outline=GOLD, width=3)
-call = 'click twice on day 1'
-cf = f(BODY, 21)
-tw = d.textlength(call, font=cf)
-cx = (bx0 + bx1) / 2
-d.text((cx - tw / 2, by1 + 18), call, font=cf, fill=CREAM, stroke_width=3, stroke_fill=NAVY)
-
 # text panel
 x = PANEL_X + 10
 d.text((x, 92), 'Remake Map', font=f(TITLE, 68), fill=GOLD)

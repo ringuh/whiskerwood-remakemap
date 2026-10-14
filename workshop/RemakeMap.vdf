@@ -1,7 +1,7 @@
 "workshopitem"
 {
 	"appid"		"2489330"
-	"publishedfileid"		"0"
+	"publishedfileid"		"3819716167"
 	"contentfolder"		"E:\modding\whiskerwood-remakemap\workshop\content"
 	"previewfile"		"E:\modding\whiskerwood-remakemap\docs\preview.jpg"
 	"title"		"Remake Map"
@@ -15,8 +15,7 @@ Rolled an island with no room to build, no ore nearby or a dock in a bad place? 
 [*]Same starting whiskers: the crew you picked comes along
 [*]New random map: a fresh map seed every time, so you really get a different island
 [*]Click twice: the first click arms the button, the second one remakes, so a stray click can't throw your colony away
-[*]The button shows on day 1 of a new colony and disappears when day 2 starts
-[*]Can be switched off under Settings - Mods (Remake Map - day 1 button)
+[*]The button sits above the bottom toolbar on day 1 of a new colony and disappears when day 2 starts; loading screens and menus cover it like the rest of the game UI
 [*]Does nothing in the background
 [/list]
 
@@ -30,5 +29,5 @@ Rolled an island with no room to build, no ore nearby or a dock in a bad place? 
 [url=https://github.com/ringuh/whiskerwood-remakemap]GitHub[/url]
 
 Created using the [url=https://github.com/Whiskerwood-Modding/Whiskerwood-Project]Whiskerwood modkit[/url]."
-	"changenote"		"1.0: first release."
+	"changenote"		"1.1: The button now sits above the bottom toolbar and no longer shows over loading screens and menus. Removed the mod-menu setting."
 }

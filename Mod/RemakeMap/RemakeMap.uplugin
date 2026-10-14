@@ -1,7 +1,7 @@
 {
 	"Name": "RemakeMap",
 	"Description": "Remake Map: a Remake button on the first day starts a fresh map with the same new-game settings and the same starting whiskers.",
-	"Version": "1.0",
+	"Version": "1.1",
 	"CreatedBy": "rinku",
 	"EngineVersion": "5.8"
 }

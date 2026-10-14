@@ -1,0 +1,95 @@
+# Remake Map
+
+A quality-of-life mod for [Whiskerwood](https://store.steampowered.com/app/2489330/Whiskerwood/).
+
+![Remake Map](docs/preview.jpg)
+
+Rolled a bad starting island? Starting over normally means going back to the menu, setting everything up
+again and losing the starting whiskers you picked. This mod adds a **Remake map** button on the first day of
+a new colony: it restarts with the **same new-game settings** and the **same starting whiskers** on a
+**new random map**.
+
+## Features
+
+- Same new-game settings: map size, island sizes, extra and barren islands, scenario, difficulty and every other choice.
+- Same starting whiskers.
+- New map every time: the mod rolls a new map seed (the game keeps the seed among the new-game settings,
+  so restarting without a new seed would rebuild the exact same island).
+- Two clicks: the first arms the button (*Click again to remake the map*), the second remakes.
+- The button shows on day 1 of a new colony and is removed when day 2 starts.
+- Setting under **Settings → Mods**: *Remake Map - day 1 button* (on by default).
+- Does nothing in the background: it reacts to the button and the day change only.
+
+## Installing
+
+- **Steam Workshop:** subscribe.
+- **Manually:** put `RemakeMap.pak` and `RemakeMap.uplugin` in `%localappdata%\Whiskerwood\Saved\mods\RemakeMap\`.
+
+## Known limitations
+
+- No button after loading a save, even a day-1 save: the game only remembers the settings of the most
+  recent new game, which may belong to another colony.
+- The new colony keeps the same colony name.
+
+## Repo layout
+
+- `Mod/RemakeMap/` - modkit assets + `RemakeMap.uplugin` (the one that ships)
+- `docs/graphs/` - Blueprint paste text (generated)
+- `docs/preview.jpg` - Workshop preview (built by `tools/make_preview.py` from `docs/screenshot.png`)
+- `tools/remakemap_build.py` - graph generator (`tools/t3d.py`, `tools/rm_common.py`)
+- `workshop/` - `RemakeMap.vdf`, `HOW_TO_UPLOAD.md`
+- `sync-from-modkit.bat`, `sync-to-steam.bat`
+
+## Building from source
+
+Generate the graphs: `JMAP=path/to/Whiskerwood-x.jmap.gz python tools/remakemap_build.py` → `tools/out/`.
+
+Assets in `/Game/Mods/RemakeMap/` (modkit `Content/Mods/RemakeMap`):
+
+| Asset | Type | Notes |
+|---|---|---|
+| BP_Startup | Actor Blueprint | paste `docs/graphs/BP_Startup.txt` (mod option) |
+| BP_MapLoad | Actor Blueprint | paste `docs/graphs/BP_MapLoad.txt` |
+| WBP_RemakeButton | Widget Blueprint (User Widget) | designer only: Button `Btn` with a TextBlock `Label` inside, both *Is Variable* |
+| PAL_RemakeMap | Primary Asset Label | Chunk ID **30**, Label Assets in My Directory, Cook Rule Always Cook |
+
+BP_MapLoad variables:
+
+| Name | Type |
+|---|---|
+| Debug | Boolean |
+| Ready | Boolean |
+| SetupTries | Integer |
+| Armed | Boolean |
+| Button | WBP_RemakeButton (Object Reference) |
+| Meta | Meta Save (Object Reference) |
+| Arco | Arco Systems (Object Reference) |
+| PrefKeys | Name **array** |
+| NewSeed | Integer |
+| NewRaw | Float |
+
+Copy `Mod/RemakeMap/RemakeMap.uplugin` into the modkit folder before Cook & Install.
+
+## How it works
+
+- The new-game menu keeps its choices in the game's MetaSave (`ArcoGameInstance.GetMetaSave`): map extents,
+  colony name, starting whiskers (`newStartingAgents`), debt difficulty and the map preferences
+  (`newMapPreferenceNames` / `newMapRawPreferences`: scenario, map size, islands, … and `Seed`).
+- Setup runs at BeginPlay (new games don't send `onLoadingFinished`) and at `onLoadingFinished`. The button is
+  shown when the option is on, `ArcoSystems.IsSaveGame` is false and `WorldTime.m_day` is 1.
+- Second click: `SetNewMapPreference("Seed", <random 1..9999999>, <random 0..1000>)`, then
+  `ArcoGameInstance.EnterPlay(NEW_GENERATION)`, the same call a new game uses.
+- `ModAPI.onDayStart` with day > 1 removes the button.
+
+## Debug logging
+
+Create `%localappdata%\Whiskerwood\Saved\mods\RemakeMapConfig\debug.txt` with any text (an empty file counts as off);
+lines go to `Saved\Logs\modlog.txt` (colony state, MetaSave contents, the new seed).
+
+## Version history
+
+- **1.0** - first release.
+
+## Credits
+
+Made by rinku. Created using the [Whiskerwood modkit](https://github.com/Whiskerwood-Modding/Whiskerwood-Project).

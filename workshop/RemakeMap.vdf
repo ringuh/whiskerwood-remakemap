@@ -1,0 +1,34 @@
+"workshopitem"
+{
+	"appid"		"2489330"
+	"publishedfileid"		"0"
+	"contentfolder"		"E:\modding\whiskerwood-remakemap\workshop\content"
+	"previewfile"		"E:\modding\whiskerwood-remakemap\docs\preview.jpg"
+	"title"		"Remake Map"
+	"description"		"[b]Bad starting spot? Remake the map with one button - same settings, same whiskers, new island.[/b]
+
+Rolled an island with no room to build, no ore nearby or a dock in a bad place? Starting over normally means going back to the menu and setting everything up again, and the starting whiskers you picked are gone. This mod adds a [b]Remake map[/b] button for the first day of a new colony.
+
+[h2]Features[/h2]
+[list]
+[*]Same new-game settings: map size, island sizes, extra and barren islands, scenario, difficulty and every other choice you made
+[*]Same starting whiskers: the crew you picked comes along
+[*]New random map: a fresh map seed every time, so you really get a different island
+[*]Click twice: the first click arms the button, the second one remakes, so a stray click can't throw your colony away
+[*]The button shows on day 1 of a new colony and disappears when day 2 starts
+[*]Can be switched off under Settings - Mods (Remake Map - day 1 button)
+[*]Does nothing in the background
+[/list]
+
+[h2]Good to know[/h2]
+[list]
+[*]Only in a colony you just started: after loading a save there is no button, because the game only remembers the settings of your most recent new game
+[*]The new colony keeps the same colony name
+[/list]
+
+[h2]Source[/h2]
+[url=https://github.com/ringuh/whiskerwood-remakemap]GitHub[/url]
+
+Created using the [url=https://github.com/Whiskerwood-Modding/Whiskerwood-Project]Whiskerwood modkit[/url]."
+	"changenote"		"1.0: first release."
+}

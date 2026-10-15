@@ -59,7 +59,7 @@ import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 from rm_common import *
 
-BUILD = 'v17'
+BUILD = 'v18'
 TRACE = False         # test build: every log line ungated. Release builds: False (Debug = RemakeMapConfig\debug.txt)
 OUT = os.path.join(os.path.dirname(__file__), 'out')
 os.makedirs(OUT, exist_ok=True)
@@ -375,8 +375,111 @@ sA = sv('Armed', BOOL, X + 250, Y + 300, value='true'); ex(bA, sA, 'else')
 lb2 = set_label(LABEL_ARMED, X + 500, Y + 300, 'Armed', sA)
 lA = L(g, X + 1000, Y + 300, msg='RemakeMap: armed (first click)', name='LogArmed'); ex(lb2, lA)
 lR = L(g, X + 300, Y, msg='RemakeMap: second click, remaking', name='LogRemake'); ex(bA, lR)
+
+# ---- v18 (1.2): save name "<Colony>_<roman>" instead of the game's "Unnamed_<date>".
+# EnterPlay's Filename = the save name (v17 passed "" -> "Unnamed_2026.10.15-17.34.06"; the menu's games are saved as
+# "<Colony>" / "<Colony>_autosave"). The original map is number I, the first remake II, the next III, ...
+# The remake count must survive EnterPlay (BP_MapLoad is a new actor in the new map), and the current save name is not
+# readable from Blueprints. So the mod keeps a tiny state in SaveGames\RemakeMap.sav (SystemCore.GenericSaveGame:
+# string/number store): the seed and colony of the map it made last and its number. When the current map's seed
+# (MetaSave Seed preference = the most recent new game) and colony match that state, this map is our remake #n
+# -> the next is n+1; otherwise this map is an original (menu game) -> the next is II.
+# A numeral whose save already exists (e.g. an older colony with the same name) is skipped, so no save is overwritten.
+GSG = '/Script/SystemCore.GenericSaveGame'
+GSG_T = OBJ(GSG)
+SLOT = 'RemakeMap'
+def roman(n):
+    s = ''
+    for v, r in ((100, 'C'), (90, 'XC'), (50, 'L'), (40, 'XL'), (10, 'X'), (9, 'IX'), (5, 'V'), (4, 'IV'), (1, 'I')):
+        while n >= v: s += r; n -= v
+    return s
+ROMAN = ','.join(roman(i) for i in range(1, 101))
+assert ROMAN.split(',')[:12] == 'I II III IV V VI VII VIII IX X XI XII'.split() and ROMAN.split(',')[39] == 'XL' and ROMAN.split(',')[-1] == 'C', ROMAN[:80]
+assert ROMAN.split(',')[48] == 'XLIX' and ROMAN.split(',')[93] == 'XCIV' and ROMAN.split(',')[98] == 'XCIX'
+
+
+def colony(x, y, tag):
+    n = g.call(ARCO + ':GetColonyName', 'ColonyName' + tag, x, y); link(gv('Arco', OBJ(ARCO), x - 150, y + 50, 'Col' + tag), n['self'])
+    return n['ReturnValue']
+
+
+def gstr(key, x, y, tag):
+    n = g.call(GSG + ':GetString', 'StateGet' + tag, x, y, Key=key); link(gv('State', GSG_T, x - 150, y + 50, 'G' + tag), n['self'])
+    return n['ReturnValue']
+
+
+SX, SY = 300, 2800
+# A: load the state (or make a new one)
+ld = g.call('/Script/Engine.GameplayStatics:LoadGameFromSlot', 'LoadState', SX, SY, SlotName=SLOT, UserIndex='0'); ex(lR, ld)
+c1 = g.cast(GSG, False, SX + 250, SY, name='AsStateLoaded'); link(ld['ReturnValue'], c1['Object']); ex(ld, c1)
+s1 = sv('State', GSG_T, SX + 500, SY, c1['AsGenericSaveGame'], tag='Loaded'); ex(c1, s1)
+cr = g.call('/Script/Engine.GameplayStatics:CreateSaveGameObject', 'NewState', SX + 500, SY + 300, SaveGameClass=GSG); ex(c1, cr, 'CastFailed')
+c2 = g.cast(GSG, False, SX + 750, SY + 300, name='AsStateNew'); link(cr['ReturnValue'], c2['Object']); ex(cr, c2)
+s2 = sv('State', GSG_T, SX + 1000, SY + 300, c2['AsGenericSaveGame'], tag='New'); ex(c2, s2)
+jA = knot(g, SX + 1250, SY, 'StateJoin'); link(s1['then'], jA['InputPin']); link(s2['then'], jA['InputPin']); link(c2['CastFailed'], jA['InputPin'])
+# B: is the current map our remake? -> RemakeNo = first number to try
+gm = g.call(GI + ':GetMetaSave', 'MetaNow', SX + 1400, SY); link(self_node(g, SX + 1250, SY + 200, 'MeMeta')['self'], gm['Context']); ex(jA, gm)
+mpn = g.get('newMapPreferenceNames', MAP(NAME, NAME), SX + 1400, SY + 400, owner=META, name='MetaPrefNames'); link(gm['ReturnValue'], mpn['self'])
+mf = g.call('/Script/Engine.BlueprintMapLibrary:Map_Find', 'FindSeedNow', SX + 1650, SY + 400)
+t_ = MAP(NAME, NAME); t_['ref'] = True; t_['const'] = True; retype(mf['TargetMap'], t_)
+t_ = dict(NAME); t_['ref'] = True; t_['const'] = True; retype(mf['Key'], t_); mf['Key'].default = 'Seed'
+retype(mf['Value'], NAME)
+link(mpn['newMapPreferenceNames'], mf['TargetMap'])
+curSeed = nstr(g, mf['Value'], SX + 1900, SY + 400, 'SeedNowStr')
+prevSeed = gstr('seed', SX + 1900, SY + 550, 'Seed')
+prevCol = gstr('colony', SX + 1900, SY + 700, 'Colony')
+gnum = g.call(GSG + ':GetNumber', 'StateGetCount', SX + 1900, SY + 850, Key='count'); link(gv('State', GSG_T, SX + 1750, SY + 900, 'GCount'), gnum['self'])
+prevCnt = g.call(KML + ':FTrunc', 'StateCount', SX + 2100, SY + 850); link(gnum['ReturnValue'], prevCnt['A'])
+isChain = andb(g, andb(g, streq(g, curSeed, prevSeed, SX + 2150, SY + 450, 'SameSeed'),
+                       notb(g, g.call(KSTR + ':IsEmpty', 'NoStateSeed', SX + 2150, SY + 600)['ReturnValue'], SX + 2300, SY + 600, 'HasStateSeed'),
+                       SX + 2400, SY + 500, 'SeedChain'),
+               streq(g, colony(SX + 2150, SY + 750, 'Chain'), prevCol, SX + 2300, SY + 750, 'SameColony'), SX + 2550, SY + 600, 'IsChain')
+link(prevSeed, [n_ for n_ in g.nodes if n_.name == 'NoStateSeed'][0]['InString'])
+nxt = g.call(KML + ':Add_IntInt', 'StateCountPlus', SX + 2300, SY + 900, B='1'); link(prevCnt['ReturnValue'], nxt['A'])
+first = g.call(KML + ':SelectInt', 'FirstNumber', SX + 2650, SY + 800, B='2'); link(nxt['ReturnValue'], first['A']); link(isChain, first['bPickA'])
+srn = sv('RemakeNo', INT, SX + 2650, SY, first['ReturnValue'], tag='First'); ex(gm, srn)
+lCh = L(g, SX + 2950, SY, msg_pin=concat(g, SX + 2950, SY + 200, 'RemakeMap: state ', nm(g, gv('State', GSG_T, SX + 2800, SY + 250, 'LN'), SX + 2900, SY + 250, 'StateName'),
+                                          ' seed now=', curSeed, ' state seed=', prevSeed, ' colony=', colony(SX + 2800, SY + 400, 'Log'), ' state colony=', prevCol,
+                                          ' state count=', istr(g, prevCnt['ReturnValue'], SX + 2800, SY + 500, 'StateCountStr'),
+                                          ' chain=', bstr(g, isChain, SX + 2800, SY + 550, 'ChainStr'),
+                                          ' -> first try ', istr(g, gv('RemakeNo', INT, SX + 2800, SY + 600, 'L'), SX + 2900, SY + 600, 'FirstStr')), name='LogChain')
+ex(srn, lCh)
+# C: existing saves as one "|name|name|" string (".whisker" / "_autosave" removed, compared case-insensitively)
+gsv = g.call(GI + ':GetSaveGames', 'SaveList', SX + 3300, SY + 400, saveLocation='SAVED_GAMES'); link(self_node(g, SX + 3150, SY + 500, 'MeSaves')['self'], gsv['Context'])
+jn = g.call(KSTR + ':JoinStringArray', 'SaveListJoined', SX + 3550, SY + 400, Separator='|'); link(gsv['ReturnValue'], jn['SourceArray']); jn['SourceArray'].default = None
+rp1 = g.call(KSTR + ':Replace', 'NoExt', SX + 3800, SY + 400, From='.whisker', To='', SearchCase='IgnoreCase'); link(jn['ReturnValue'], rp1['SourceString'])
+rp2 = g.call(KSTR + ':Replace', 'NoAutosave', SX + 4050, SY + 400, From='_autosave', To='', SearchCase='IgnoreCase'); link(rp1['ReturnValue'], rp2['SourceString'])
+# in case the list holds paths: folder separators become separators too
+rp3 = g.call(KSTR + ':Replace', 'NoSlash', SX + 4050, SY + 550, From='/', To='|', SearchCase='IgnoreCase'); link(rp2['ReturnValue'], rp3['SourceString'])
+rp4 = g.call(KSTR + ':Replace', 'NoBackslash', SX + 4050, SY + 700, From='\\\\', To='|', SearchCase='IgnoreCase'); link(rp3['ReturnValue'], rp4['SourceString'])
+sTk = sv('Taken', STR, SX + 4300, SY, concat(g, SX + 4200, SY + 400, '|', rp4['ReturnValue'], '|')); ex(lCh, sTk)
+lTk = L(g, SX + 4550, SY, msg_pin=concat(g, SX + 4550, SY + 200, 'RemakeMap: ', istr(g, arrfn(g, 'Array_Length', STR, SX + 4350, SY + 600, 'SaveCount', arr_pin=gsv['ReturnValue'])['ReturnValue'], SX + 4450, SY + 600, 'SaveCountStr'),
+                                          ' saves, list starts ', g.call(KSTR + ':GetSubstring', 'TakenStart', SX + 4450, SY + 700, StartIndex='0', Length='200')['ReturnValue']), name='LogTaken')
+link(gv('Taken', STR, SX + 4300, SY + 750, 'L'), [n_ for n_ in g.nodes if n_.name == 'TakenStart'][0]['SourceString'])
+ex(sTk, lTk)
+# D: first free numeral >= RemakeNo
+sNm = sv('Numerals', ARR(STR), SX + 4900, SY, g.call(KSTR + ':ParseIntoArray', 'RomanList', SX + 4800, SY + 300, SourceString=ROMAN, Delimiter=',', CullEmptyStrings='true')['ReturnValue']); ex(lTk, sNm)
+sPk = sv('Picked', STR, SX + 5150, SY, value='', tag='Clear'); ex(sNm, sPk)
+lpN = foreach(g, gv('Numerals', ARR(STR), SX + 5300, SY + 200, 'F'), STR, SX + 5400, SY, 'NumeralLoop'); ex(sPk, lpN, 'then', 'Exec')
+num = g.call(KML + ':Add_IntInt', 'NumeralNumber', SX + 5650, SY + 400, B='1'); link(lpN['Array Index'], num['A'])
+geq = g.call(KML + ':GreaterEqual_IntInt', 'NotBelowFirst', SX + 5850, SY + 400); link(num['ReturnValue'], geq['A']); link(gv('RemakeNo', INT, SX + 5700, SY + 500, 'C'), geq['B'])
+cand = concat(g, SX + 5850, SY + 650, '|', colony(SX + 5650, SY + 700, 'Cand'), '_', lpN['Array Element'], '|')
+used = g.call(KSTR + ':Contains', 'NumeralUsed', SX + 6100, SY + 650, bUseCase='false', bSearchFromEnd='false'); link(gv('Taken', STR, SX + 5950, SY + 750, 'C'), used['SearchIn']); link(cand, used['Substring'])
+free = andb(g, andb(g, g.call(KSTR + ':IsEmpty', 'NothingPicked', SX + 6100, SY + 400)['ReturnValue'], geq['ReturnValue'], SX + 6250, SY + 400, 'CanTake'),
+            notb(g, used['ReturnValue'], SX + 6300, SY + 650, 'NumeralFree'), SX + 6400, SY + 450, 'TakeNumeral')
+link(gv('Picked', STR, SX + 5950, SY + 350, 'C'), [n_ for n_ in g.nodes if n_.name == 'NothingPicked'][0]['InString'])
+bN = g.branch(SX + 6450, SY - 300, 'BrTakeNumeral'); link(free, bN['Condition']); ex(lpN, bN, 'LoopBody')
+spk = sv('Picked', STR, SX + 6700, SY - 300, lpN['Array Element']); ex(bN, spk)
+srn2 = sv('RemakeNo', INT, SX + 6950, SY - 300, num['ReturnValue'], tag='Taken'); ex(spk, srn2)
+# none free up to C (100): plain number
+bE = g.branch(SX + 5700, SY + 1100, 'BrNonePicked'); ex(lpN, bE, 'Completed')
+link(g.call(KSTR + ':IsEmpty', 'StillNothing', SX + 5550, SY + 1250)['ReturnValue'], bE['Condition'])
+link(gv('Picked', STR, SX + 5400, SY + 1300, 'E'), [n_ for n_ in g.nodes if n_.name == 'StillNothing'][0]['InString'])
+spd = sv('Picked', STR, SX + 5950, SY + 1100, istr(g, gv('RemakeNo', INT, SX + 5800, SY + 1300, 'D'), SX + 5900, SY + 1300, 'DigitsStr'), tag='Digits'); ex(bE, spd)
+jP = knot(g, SX + 6200, SY + 1100, 'PickedJoin'); link(spd['then'], jP['InputPin']); link(bE['else'], jP['InputPin'])
+
 ri = g.call(KML + ':RandomIntegerInRange', 'RollSeed', X + 550, Y + 200, min='1', max='9999999')
-ss = sv('NewSeed', INT, X + 600, Y, ri['ReturnValue']); ex(lR, ss)
+ss = sv('NewSeed', INT, X + 600, Y, ri['ReturnValue']); link(jP['OutputPin'], ss['execute'])
 rf = g.call(KML + ':RandomFloatInRange', 'RollRaw', X + 800, Y + 200, min='0.0', max='1000.0')
 sr = sv('NewRaw', DBL, X + 850, Y, rf['ReturnValue']); ex(ss, sr)
 seedStr = istr(g, gv('NewSeed', INT, X + 950, Y + 300, 'S'), X + 1050, Y + 300, 'NewSeedStr')
@@ -387,8 +490,26 @@ link(seedName['ReturnValue'], snp['choiceName']); link(gv('NewRaw', DBL, X + 125
 lSd = L(g, X + 1700, Y, msg_pin=concat(g, X + 1700, Y + 200, 'RemakeMap: new seed ', istr(g, gv('NewSeed', INT, X + 1550, Y + 350, 'L'), X + 1650, Y + 350, 'NewSeedLog'),
                                        ' (raw ', fstr(gv('NewRaw', DBL, X + 1550, Y + 450, 'L'), X + 1650, Y + 450, 'NewRawLog'), ')'), name='LogNewSeed')
 ex(snp, lSd)
-dmC = lSd
-ep = g.call(GI + ':EnterPlay', 'Remake', X + 5700, Y, Filename='', gameType='NEW_GENERATION', saveLocation='SAVED_GAMES', forceFullReplay='false')
+# E: remember this remake (seed, colony, number) for the next one, then start the map with the save name
+X2 = X + 2100
+def sstr(key, val_pin, x, y, tag, prev):
+    n = g.call(GSG + ':SetString', 'StateSet' + tag, x, y, Key=key); link(gv('State', GSG_T, x - 150, y + 200, 'S' + tag), n['self']); link(val_pin, n['Value']); ex(prev, n)
+    return n
+w1 = sstr('seed', istr(g, gv('NewSeed', INT, X2 - 100, Y + 400, 'St'), X2, Y + 400, 'StateSeedStr'), X2, Y, 'Seed', lSd)
+w2 = sstr('colony', colony(X2 + 150, Y + 400, 'St'), X2 + 250, Y, 'Colony', w1)
+w3 = g.call(GSG + ':SetNumber', 'StateSetCount', X2 + 500, Y, Key='count'); link(gv('State', GSG_T, X2 + 350, Y + 200, 'SCount'), w3['self'])
+link(conv(g, 'Conv_IntToDouble', gv('RemakeNo', INT, X2 + 350, Y + 300, 'St'), X2 + 450, Y + 300, 'StateCountF', cls=KML), w3['Value']); ex(w2, w3)
+w4 = g.call('/Script/Engine.GameplayStatics:SaveGameToSlot', 'SaveState', X2 + 750, Y, SlotName=SLOT, UserIndex='0'); link(gv('State', GSG_T, X2 + 600, Y + 200, 'Save'), w4['SaveGameObject']); ex(w3, w4)
+# save name = "<Colony>_<numeral>" ("" if the colony has no name: the game then picks "Unnamed_<date>" as before)
+noCol = g.call(KSTR + ':IsEmpty', 'NoColonyName', X2 + 900, Y + 600); link(colony(X2 + 750, Y + 600, 'Empty'), noCol['InString'])
+saveName = g.call(KML + ':SelectString', 'SaveName', X2 + 1150, Y + 450, A='')
+link(concat(g, X2 + 950, Y + 450, colony(X2 + 800, Y + 450, 'Name'), '_', gv('Picked', STR, X2 + 850, Y + 500, 'N')), saveName['B']); link(noCol['ReturnValue'], saveName['bPickA'])
+lN = L(g, X2 + 1100, Y, msg_pin=concat(g, X2 + 1150, Y + 200, 'RemakeMap: save name \'', saveName['ReturnValue'], '\' (map ', istr(g, gv('RemakeNo', INT, X2 + 1000, Y + 300, 'L'), X2 + 1050, Y + 300, 'NumberStr'),
+                                       '), state saved=', bstr(g, w4['ReturnValue'], X2 + 1050, Y + 350, 'StateSavedStr')), name='LogSaveName')
+ex(w4, lN)
+dmC = lN
+ep = g.call(GI + ':EnterPlay', 'Remake', X + 5700, Y, gameType='NEW_GENERATION', saveLocation='SAVED_GAMES', forceFullReplay='false')
+link(saveName['ReturnValue'], ep['Filename'])
 link(self_node(g, X + 5550, Y + 200, 'MePlay')['self'], ep['Context']); ex(dmC, ep)
 lE = L(g, X + 6000, Y, msg='RemakeMap: EnterPlay(NEW_GENERATION) called', name='LogEnterPlay'); ex(ep, lE)
 write('BP_MapLoad', g)
@@ -402,6 +523,8 @@ VARS = {
         ('Arco', 'Arco Systems (Object Reference)'),
         ('NewSeed', 'Integer'), ('NewRaw', 'Float'), ('Placed', 'Boolean'), ('HudTries', 'Integer'),
         ('Hud', 'User Widget (Object Reference)'), ('Level', 'Widget (Object Reference) **array**'), ('Next', 'Widget (Object Reference) **array**'), ('TB', 'Widget (Object Reference)'),
+        ('State', 'Generic Save Game (Object Reference)'), ('RemakeNo', 'Integer'), ('Taken', 'String'),
+        ('Numerals', 'String **array**'), ('Picked', 'String'),
     ],
 }
 with open(os.path.join(OUT, 'variables.txt'), 'w') as f:

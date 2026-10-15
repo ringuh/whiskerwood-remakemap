@@ -18,6 +18,9 @@ a new colony: it restarts with the **same new-game settings** and the **same sta
 - Two clicks: the first arms the button (*Click again to remake the map*), the second remakes.
 - The button sits above the bottom toolbar on day 1 of a new colony and is removed when day 2 starts. It lives in
   the same part of the game UI as the toolbar, so loading screens and menus cover it.
+- Save names like the game's own: the remade colony is saved as `<Colony>_<Roman numeral>`, counting the maps:
+  the original is `Airhaven`, the first remake `Airhaven_II`, the next `Airhaven_III`, … (autosaves `Airhaven_II_autosave`).
+  A numeral whose save already exists (an older colony with the same name) is skipped, so no save is overwritten.
 - Does nothing in the background: it reacts to the button and the day change only.
 
 ## Installing
@@ -70,6 +73,11 @@ BP_MapLoad variables:
 | Level | Widget (Object Reference) **array** |
 | Next | Widget (Object Reference) **array** |
 | TB | Widget (Object Reference) |
+| State | Generic Save Game (Object Reference) |
+| RemakeNo | Integer |
+| Taken | String |
+| Numerals | String **array** |
+| Picked | String |
 
 Copy `Mod/RemakeMap/RemakeMap.uplugin` into the modkit folder before Cook & Install.
 
@@ -87,16 +95,23 @@ Copy `Mod/RemakeMap/RemakeMap.uplugin` into the modkit folder before Cook & Inst
   alignment bottom-centre, position (0, -400). The toolbar reports a desired size of 0, so a bar height of 100 is
   assumed. Until the toolbar exists and is visible, a one-shot 1 s timer retries (max 60). The walk runs once.
 - Second click: `SetNewMapPreference("Seed", <random 1..9999999>, <random 0..1000>)`, then
-  `ArcoGameInstance.EnterPlay(NEW_GENERATION)`, the same call a new game uses.
+  `ArcoGameInstance.EnterPlay(<save name>, NEW_GENERATION)`, the same call a new game uses. EnterPlay's file name
+  becomes the save name (an empty one gives the game's `Unnamed_<date>`).
+- Save name: the mod keeps a small state in `Saved\SaveGames\RemakeMap.sav` (a `SystemCore.GenericSaveGame`): the
+  seed, colony name and number of the map it made last. If the current map's seed (the `Seed` preference in the
+  MetaSave = the most recent new game) and colony match it, the current map is that remake and the next number is
+  one higher; otherwise the current map is an original and the next number is II. The first numeral (I…C) from there
+  whose `<Colony>_<numeral>` is not among `ArcoGameInstance.GetSaveGames` (`.whisker` / `_autosave` ignored) is used.
 - `ModAPI.onDayStart` with day > 1 removes the button.
 
 ## Debug logging
 
 Create `%localappdata%\Whiskerwood\Saved\mods\RemakeMapConfig\debug.txt` with any text (an empty file counts as off);
-lines go to `Saved\Logs\modlog.txt` (colony state, where the button was placed, the new seed).
+lines go to `Saved\Logs\modlog.txt` (colony state, where the button was placed, the new seed, the save name).
 
 ## Version history
 
+- **1.2** - remade colonies are saved as `<Colony>_II`, `_III`, … instead of `Unnamed_<date>`.
 - **1.1** - the button sits above the bottom toolbar and is covered by loading screens and menus like the rest of the game UI; mod-menu setting removed.
 - **1.0** - first release.
 
